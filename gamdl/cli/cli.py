@@ -104,8 +104,44 @@ async def main(config: CliConfig):
     music_video_interface = AppleMusicMusicVideoInterface(interface)
     uploaded_video_interface = AppleMusicUploadedVideoInterface(interface)
 
+    if config.read_urls_as_txt:
+        urls_from_file = []
+        for url in config.urls:
+            if Path(url).is_file() and Path(url).exists():
+                urls_from_file.extend(
+                    [
+                        line.strip()
+                        for line in Path(url).read_text(encoding="utf-8").splitlines()
+                        if line.strip()
+                    ]
+                )
+        urls = urls_from_file
+    else:
+        urls = config.urls
+
+    if not urls:
+        raw_urls = click.prompt(
+            "Paste Apple Music URL(s) (space-separated)",
+            default="",
+            show_default=False,
+        ).strip()
+        if raw_urls:
+            urls = raw_urls.split()
+
+    download_folder_name = click.prompt(
+        "Download folder name (created in current directory)",
+        default="Apple Music",
+        show_default=True,
+    )
+    download_path = Path.cwd() / download_folder_name
+    download_path.mkdir(parents=True, exist_ok=True)
+
+    flat_folder_template = ""
+    flat_file_template = "{artist} - {title}"
+    no_synced_lyrics = False if config.synced_lyrics_only else True
+
     base_downloader = AppleMusicBaseDownloader(
-        output_path=config.output_path,
+        output_path=str(download_path),
         temp_path=config.temp_path,
         wvd_path=config.wvd_path,
         overwrite=config.overwrite,
@@ -121,12 +157,12 @@ async def main(config: CliConfig):
         download_mode=config.download_mode,
         remux_mode=config.remux_mode,
         cover_format=config.cover_format,
-        album_folder_template=config.album_folder_template,
-        compilation_folder_template=config.compilation_folder_template,
-        no_album_folder_template=config.no_album_folder_template,
-        single_disc_file_template=config.single_disc_file_template,
-        multi_disc_file_template=config.multi_disc_file_template,
-        no_album_file_template=config.no_album_file_template,
+        album_folder_template=flat_folder_template,
+        compilation_folder_template=flat_folder_template,
+        no_album_folder_template=flat_folder_template,
+        single_disc_file_template=flat_file_template,
+        multi_disc_file_template=flat_file_template,
+        no_album_file_template=flat_file_template,
         playlist_file_template=config.playlist_file_template,
         date_tag_template=config.date_tag_template,
         exclude_tags=config.exclude_tags,
@@ -138,7 +174,7 @@ async def main(config: CliConfig):
         interface=song_interface,
         codec=config.song_codec,
         synced_lyrics_format=config.synced_lyrics_format,
-        no_synced_lyrics=config.no_synced_lyrics,
+        no_synced_lyrics=no_synced_lyrics,
         synced_lyrics_only=config.synced_lyrics_only,
         use_album_date=config.use_album_date,
         fetch_extra_tags=config.fetch_extra_tags,
@@ -202,21 +238,6 @@ async def main(config: CliConfig):
                 " without enabling wrapper."
                 "They're not guaranteed to work due to API limitations."
             )
-
-    if config.read_urls_as_txt:
-        urls_from_file = []
-        for url in config.urls:
-            if Path(url).is_file() and Path(url).exists():
-                urls_from_file.extend(
-                    [
-                        line.strip()
-                        for line in Path(url).read_text(encoding="utf-8").splitlines()
-                        if line.strip()
-                    ]
-                )
-        urls = urls_from_file
-    else:
-        urls = config.urls
 
     error_count = 0
     for url_index, url in enumerate(urls, 1):

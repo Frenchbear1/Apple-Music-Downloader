@@ -45,7 +45,7 @@ class CliConfig:
         argument(
             nargs=-1,
             type=str,
-            required=True,
+            required=False,
         ),
     ]
     read_urls_as_txt: Annotated[

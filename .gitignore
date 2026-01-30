@@ -6,3 +6,7 @@ __pycache__
 !pyproject.toml
 !README.md
 !uv.lock
+
+# Local secrets
+cookies.txt
+
