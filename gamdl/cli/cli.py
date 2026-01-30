@@ -62,7 +62,7 @@ async def main(config: CliConfig):
     root_logger.setLevel(config.log_level)
     root_logger.propagate = False
 
-    stream_handler = logging.StreamHandler()
+    stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(CustomLoggerFormatter())
     root_logger.addHandler(stream_handler)
 
@@ -270,7 +270,7 @@ async def main(config: CliConfig):
             length=100,
             label="Overall",
             show_eta=False,
-            file=sys.stdout,
+            file=sys.stderr,
         )
         progress.__enter__()
 
@@ -333,8 +333,10 @@ async def main(config: CliConfig):
             )
             progress.__exit__(None, None, None)
             continue
+        click.echo("Phase: processing complete", file=sys.stdout)
         fill_phase(progress, 0)
 
+        click.echo("Phase: preparing temp files", file=sys.stdout)
         temp_path.mkdir(parents=True, exist_ok=True)
         phase_two_total_seconds = max(5.0, min(20.0, total_tracks * 0.2))
         phase_two_step_delay = phase_two_total_seconds / max(1, total_tracks)
@@ -348,6 +350,7 @@ async def main(config: CliConfig):
             await asyncio.sleep(phase_two_step_delay)
         fill_phase(progress, 1)
 
+        click.echo("Phase: downloading", file=sys.stdout)
         semaphore = asyncio.Semaphore(4)
 
         async def download_one(index: int, item: DownloadItem):
