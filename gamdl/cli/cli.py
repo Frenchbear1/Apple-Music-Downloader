@@ -93,8 +93,8 @@ async def main(config: CliConfig):
             " anything"
         )
         return
-    if apple_music_api.account_restrictions:
-        logger.warning(
+    if apple_music_api.account_restrictions and config.log_level == "DEBUG":
+        logger.debug(
             "Your account has content restrictions enabled, some content may not be"
             " downloadable"
         )
