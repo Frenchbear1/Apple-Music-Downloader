@@ -1,22 +1,15 @@
-# Gamdl (Glomatico's Apple Music Downloader)
+# Apple Converter (Custom Gamdl)
 
-[![PyPI version](https://img.shields.io/pypi/v/gamdl?color=blue)](https://pypi.org/project/gamdl/)
-[![Python versions](https://img.shields.io/pypi/pyversions/gamdl)](https://pypi.org/project/gamdl/)
-[![License](https://img.shields.io/github/license/glomatico/gamdl)](https://github.com/glomatico/gamdl/blob/main/LICENSE)
-[![Downloads](https://img.shields.io/pypi/dm/gamdl)](https://pypi.org/project/gamdl/)
+Custom fork of Gamdl with a simplified prompt-driven flow and flat filename output.
 
-A command-line app for downloading Apple Music songs, music videos and post videos.
+## ✨ What’s Different in This Fork
 
-**Join our Discord Server:** <https://discord.gg/aBjMEZ9tnq>
+- 🧭 **Prompt-first flow** - Run `gamdl`, paste URL(s), then name the folder
+- 📁 **Flat output** - No artist/album subfolders
+- 🎵 **Filenames** - `Artist - Song Title.m4a`
+- 📝 **Lyrics off by default** - Only the `.m4a` file is created
 
-## ✨ Features
-
-- 🎵 **High-Quality Songs** - Download songs in AAC 256kbps and other codecs
-- 🎬 **High-Quality Music Videos** - Download music videos in resolutions up to 4K
-- 📝 **Synced Lyrics** - Download synced lyrics in LRC, SRT, or TTML formats
-- 🏷️ **Rich Metadata** - Automatic tagging with comprehensive metadata
-- 🎤 **Artist Support** - Download all albums or music videos from an artist
-- ⚙️ **Highly Customizable** - Extensive configuration options for advanced users
+Everything else follows upstream behavior.
 
 ## 📋 Prerequisites
 
@@ -41,10 +34,10 @@ Add these tools to your system PATH for additional features:
 
 ## 📦 Installation
 
-**Install Gamdl via pip:**
+**Install this fork (editable):**
 
 ```bash
-pip install gamdl
+pip install -e .
 ```
 
 **Setup cookies:**
@@ -55,37 +48,33 @@ pip install gamdl
 ## 🚀 Usage
 
 ```bash
-gamdl [OPTIONS] URLS...
+gamdl
 ```
 
-### Supported URL Types
+### Prompts
 
-- Songs
-- Albums (Public/Library)
-- Playlists (Public/Library)
-- Music Videos
-- Artists
-- Post Videos
+1. Paste Apple Music URL(s) (space-separated)
+2. Name the output folder (created in the current directory)
 
 ### Examples
 
 **Download a song:**
 
 ```bash
-gamdl "https://music.apple.com/us/album/never-gonna-give-you-up-2022-remaster/1624945511?i=1624945512"
+gamdl
 ```
 
-**Download an album:**
+Then paste:
 
 ```bash
-gamdl "https://music.apple.com/us/album/whenever-you-need-somebody-2022-remaster/1624945511"
+https://music.apple.com/us/album/never-gonna-give-you-up-2022-remaster/1624945511?i=1624945512
 ```
 
-**Download from an artist:**
+### Output Naming
 
-```bash
-gamdl "https://music.apple.com/us/artist/rick-astley/669771"
-```
+- Files are saved as `Artist - Song Title.m4a`
+- Saved directly into the folder you name
+- No synced lyrics are downloaded by default
 
 **Interactive Prompt Controls:**
 
@@ -98,7 +87,7 @@ gamdl "https://music.apple.com/us/artist/rick-astley/669771"
 
 ## ⚙️ Configuration
 
-Configure Gamdl using command-line arguments or a config file.
+Configure Gamdl using command-line arguments or a config file (same as upstream).
 
 **Config file location:**
 
