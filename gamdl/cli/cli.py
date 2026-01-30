@@ -321,27 +321,15 @@ async def main(config: CliConfig):
         fill_phase(progress, 0)
 
         temp_path.mkdir(parents=True, exist_ok=True)
-        phase_two_done = asyncio.Event()
-
-        async def smooth_phase_two():
-            # Smooth 33->66% over a short, track-scaled duration.
-            duration = min(20.0, max(3.0, total_tracks * 0.15))
-            step_time = duration / phase_weights[1]
-            for _ in range(phase_weights[1]):
-                if phase_two_done.is_set():
-                    break
-                await asyncio.sleep(step_time)
-                update_phase(progress, 1, phase_weights[1])
-
-        phase_two_task = asyncio.create_task(smooth_phase_two())
+        phase_two_step_delay = 0.05
         for item in download_queue:
             if getattr(item, "random_uuid", None):
                 (temp_path / TEMP_PATH_TEMPLATE.format(item.random_uuid)).mkdir(
                     parents=True,
                     exist_ok=True,
                 )
-        phase_two_done.set()
-        await phase_two_task
+            update_phase(progress, 1, total_tracks)
+            await asyncio.sleep(phase_two_step_delay)
         fill_phase(progress, 1)
 
         semaphore = asyncio.Semaphore(total_tracks)
