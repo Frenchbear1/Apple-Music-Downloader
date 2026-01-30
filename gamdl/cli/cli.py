@@ -21,6 +21,7 @@ from ..downloader import (
     GamdlError,
     RemuxMode,
 )
+from ..downloader.constants import TEMP_PATH_TEMPLATE
 from ..interface import (
     AppleMusicInterface,
     AppleMusicMusicVideoInterface,
@@ -275,47 +276,53 @@ async def main(config: CliConfig):
             continue
 
         total_tracks = len(download_queue)
+        total_steps = total_tracks * 3
         logger.info(click.style(f"[Queue] {total_tracks} track(s) queued", dim=True))
 
         semaphore = asyncio.Semaphore(total_tracks)
+        progress_lock = asyncio.Lock()
 
         async def download_one(index: int, item: DownloadItem, progress):
             nonlocal error_count
-            download_queue_progress = click.style(
-                f"[Track {index}/{total_tracks}]",
-                dim=True,
-            )
-            media_title = (
-                item.media_metadata["attributes"]["name"]
-                if isinstance(item, DownloadItem)
-                else "Unknown Title"
-            )
             async with semaphore:
-                logger.info(download_queue_progress + f' Downloading "{media_title}"')
                 try:
                     await downloader.download(item)
-                    logger.info(
-                        download_queue_progress + f' Finished "{media_title}"'
-                    )
                 except GamdlError as e:
                     logger.warning(
-                        download_queue_progress + f' Skipping "{media_title}": {e}'
+                        click.style(f"[Track {index}/{total_tracks}]", dim=True)
+                        + f" Skipping track: {e}"
                     )
                 except KeyboardInterrupt:
                     exit(1)
                 except Exception:
                     error_count += 1
                     logger.error(
-                        download_queue_progress + f' Error downloading "{media_title}"',
+                        click.style(f"[Track {index}/{total_tracks}]", dim=True)
+                        + " Error downloading track",
                         exc_info=not config.no_exceptions,
                     )
                 finally:
-                    progress.update(1)
+                    async with progress_lock:
+                        progress.update(1)
 
         with click.progressbar(
-            length=total_tracks,
+            length=total_steps,
             label="Overall",
         ) as progress:
+            for _ in download_queue:
+                progress.update(1)
+                await asyncio.sleep(0)
+
+            temp_path.mkdir(parents=True, exist_ok=True)
+            for item in download_queue:
+                if getattr(item, "random_uuid", None):
+                    (temp_path / TEMP_PATH_TEMPLATE.format(item.random_uuid)).mkdir(
+                        parents=True,
+                        exist_ok=True,
+                    )
+                progress.update(1)
+                await asyncio.sleep(0)
+
             tasks = [
                 asyncio.create_task(download_one(i, item, progress))
                 for i, item in enumerate(download_queue, 1)
