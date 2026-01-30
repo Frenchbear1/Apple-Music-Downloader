@@ -1,4 +1,4 @@
-# Apple Converter (Custom Gamdl)
+# Apple Music Downloader (Custom Gamdl)
 
 Custom fork of Gamdl with a simplified prompt-driven flow and flat filename output.
 
