@@ -123,12 +123,20 @@ class AppleMusicDownloader:
     async def get_collection_download_items(
         self,
         collection_metadata: dict,
+        progress_cb: typing.Callable[[int], None] | None = None,
+        progress_total_cb: typing.Callable[[int], None] | None = None,
     ) -> list[DownloadItem]:
         tracks_metadata = collection_metadata["relationships"]["tracks"]["data"]
         async for extended_data in self.interface.apple_music_api.extend_api_data(
             collection_metadata["relationships"]["tracks"],
         ):
             tracks_metadata.extend(extended_data["data"])
+
+        total_tracks = collection_metadata.get("attributes", {}).get(
+            "trackCount", len(tracks_metadata)
+        )
+        if progress_total_cb:
+            progress_total_cb(total_tracks)
 
         tasks = [
             self.get_single_download_item(
@@ -142,12 +150,24 @@ class AppleMusicDownloader:
             for media_metadata in tracks_metadata
         ]
 
-        download_items = await safe_gather(*tasks)
-        return download_items
+        if not progress_cb:
+            download_items = await safe_gather(*tasks)
+            return download_items
+
+        task_map = {asyncio.create_task(task): idx for idx, task in enumerate(tasks)}
+        results: list[DownloadItem | None] = [None] * len(task_map)
+        for task in asyncio.as_completed(task_map):
+            idx = task_map[task]
+            results[idx] = await task
+            progress_cb(1)
+
+        return typing.cast(list[DownloadItem], results)
 
     async def get_artist_download_items(
         self,
         artist_metadata: dict,
+        progress_cb: typing.Callable[[int], None] | None = None,
+        progress_total_cb: typing.Callable[[int], None] | None = None,
     ) -> list[DownloadItem]:
         for relationship in artist_metadata["relationships"].keys():
             artist_metadata["relationships"][relationship]["data"].extend(
@@ -179,16 +199,22 @@ class AppleMusicDownloader:
 
         if media_type == "albums":
             return await self.get_artist_albums_download_items(
-                artist_metadata["relationships"]["albums"]["data"]
+                artist_metadata["relationships"]["albums"]["data"],
+                progress_cb=progress_cb,
+                progress_total_cb=progress_total_cb,
             )
         if media_type == "music-videos":
             return await self.get_artist_music_videos_download_items(
-                artist_metadata["relationships"]["music-videos"]["data"]
+                artist_metadata["relationships"]["music-videos"]["data"],
+                progress_cb=progress_cb,
+                progress_total_cb=progress_total_cb,
             )
 
     async def get_artist_albums_download_items(
         self,
         albums_metadata: list[dict],
+        progress_cb: typing.Callable[[int], None] | None = None,
+        progress_total_cb: typing.Callable[[int], None] | None = None,
     ) -> list[DownloadItem]:
         choices = [
             Choice(
@@ -213,6 +239,12 @@ class AppleMusicDownloader:
 
         download_items = []
 
+        if progress_total_cb:
+            total_tracks = sum(
+                a.get("attributes", {}).get("trackCount", 0) for a in selected
+            )
+            progress_total_cb(total_tracks)
+
         album_tasks = [
             self.interface.apple_music_api.get_album(album_metadata["id"])
             for album_metadata in selected
@@ -220,7 +252,11 @@ class AppleMusicDownloader:
         album_responses = await safe_gather(*album_tasks)
 
         track_tasks = [
-            self.get_collection_download_items(album_response["data"][0])
+            self.get_collection_download_items(
+                album_response["data"][0],
+                progress_cb=progress_cb,
+                progress_total_cb=None,
+            )
             for album_response in album_responses
         ]
         track_results = await safe_gather(*track_tasks)
@@ -233,6 +269,8 @@ class AppleMusicDownloader:
     async def get_artist_music_videos_download_items(
         self,
         music_videos_metadata: list[dict],
+        progress_cb: typing.Callable[[int], None] | None = None,
+        progress_total_cb: typing.Callable[[int], None] | None = None,
     ) -> list[DownloadItem]:
         choices = [
             Choice(
@@ -256,13 +294,29 @@ class AppleMusicDownloader:
             multiselect=True,
         ).execute_async()
 
+        if progress_total_cb:
+            progress_total_cb(len(selected))
+
         music_video_tasks = [
             self.get_single_download_item(
                 music_video_metadata,
             )
             for music_video_metadata in selected
         ]
-        download_items = await safe_gather(*music_video_tasks)
+        if not progress_cb:
+            download_items = await safe_gather(*music_video_tasks)
+            return download_items
+
+        task_map = {
+            asyncio.create_task(task): idx for idx, task in enumerate(music_video_tasks)
+        }
+        results: list[DownloadItem | None] = [None] * len(task_map)
+        for task in asyncio.as_completed(task_map):
+            idx = task_map[task]
+            results[idx] = await task
+            progress_cb(1)
+
+        return typing.cast(list[DownloadItem], results)
 
         return download_items
 
@@ -282,11 +336,15 @@ class AppleMusicDownloader:
     async def get_download_queue(
         self,
         url_info: UrlInfo,
+        progress_cb: typing.Callable[[int], None] | None = None,
+        progress_total_cb: typing.Callable[[int], None] | None = None,
     ) -> list[DownloadItem] | None:
         return await self._get_download_queue(
             "song" if url_info.sub_id else url_info.type or url_info.library_type,
             url_info.sub_id or url_info.id or url_info.library_id,
             url_info.library_id is not None,
+            progress_cb=progress_cb,
+            progress_total_cb=progress_total_cb,
         )
 
     async def _get_download_queue(
@@ -294,6 +352,8 @@ class AppleMusicDownloader:
         url_type: str,
         id: str,
         is_library: bool,
+        progress_cb: typing.Callable[[int], None] | None = None,
+        progress_total_cb: typing.Callable[[int], None] | None = None,
     ) -> list[DownloadItem] | None:
         download_items = []
 
@@ -307,6 +367,8 @@ class AppleMusicDownloader:
 
             download_items = await self.get_artist_download_items(
                 artist_response["data"][0],
+                progress_cb=progress_cb,
+                progress_total_cb=progress_total_cb,
             )
 
         if url_type in SONG_MEDIA_TYPE:
@@ -315,9 +377,13 @@ class AppleMusicDownloader:
             if song_respose is None:
                 return None
 
+            if progress_total_cb:
+                progress_total_cb(1)
             download_items.append(
                 await self.get_single_download_item(song_respose["data"][0])
             )
+            if progress_cb:
+                progress_cb(1)
 
         if url_type in ALBUM_MEDIA_TYPE:
             if is_library:
@@ -332,6 +398,8 @@ class AppleMusicDownloader:
 
             download_items = await self.get_collection_download_items(
                 album_response["data"][0],
+                progress_cb=progress_cb,
+                progress_total_cb=progress_total_cb,
             )
 
         if url_type in PLAYLIST_MEDIA_TYPE:
@@ -349,6 +417,8 @@ class AppleMusicDownloader:
 
             download_items = await self.get_collection_download_items(
                 playlist_response["data"][0],
+                progress_cb=progress_cb,
+                progress_total_cb=progress_total_cb,
             )
 
         if url_type in MUSIC_VIDEO_MEDIA_TYPE:
@@ -359,9 +429,13 @@ class AppleMusicDownloader:
             if music_video_response is None:
                 return None
 
+            if progress_total_cb:
+                progress_total_cb(1)
             download_items.append(
                 await self.get_single_download_item(music_video_response["data"][0])
             )
+            if progress_cb:
+                progress_cb(1)
 
         if url_type in UPLOADED_VIDEO_MEDIA_TYPE:
             uploaded_video = await self.interface.apple_music_api.get_uploaded_video(id)
@@ -369,9 +443,13 @@ class AppleMusicDownloader:
             if uploaded_video is None:
                 return None
 
+            if progress_total_cb:
+                progress_total_cb(1)
             download_items.append(
                 await self.get_single_download_item(uploaded_video["data"][0])
             )
+            if progress_cb:
+                progress_cb(1)
 
         return download_items
 

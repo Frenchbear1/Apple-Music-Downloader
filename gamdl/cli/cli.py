@@ -251,9 +251,10 @@ async def main(config: CliConfig):
         phase_accum = [0.0, 0.0, 0.0]
         phase_applied = [0, 0, 0]
         phase_weights = [33, 33, 34]
+        total_tracks = 0
         progress_lock = asyncio.Lock()
 
-        def update_phase(progress, phase_index: int, steps_done: int, steps_total: int):
+        def update_phase(progress, phase_index: int, steps_total: int):
             if steps_total <= 0:
                 return
             phase_accum[phase_index] += phase_weights[phase_index] / steps_total
@@ -281,7 +282,20 @@ async def main(config: CliConfig):
                     fill_phase(progress, 2)
                     continue
 
-                download_queue = await downloader.get_download_queue(url_info)
+                def progress_total_cb(count: int):
+                    nonlocal total_tracks
+                    if total_tracks <= 0:
+                        total_tracks = max(1, count)
+
+                def progress_cb(_: int):
+                    if total_tracks > 0:
+                        update_phase(progress, 0, total_tracks)
+
+                download_queue = await downloader.get_download_queue(
+                    url_info,
+                    progress_cb=progress_cb,
+                    progress_total_cb=progress_total_cb,
+                )
                 if not download_queue:
                     logger.warning(
                         url_progress
@@ -292,13 +306,13 @@ async def main(config: CliConfig):
                     fill_phase(progress, 2)
                     continue
 
-                total_tracks = len(download_queue)
+                if total_tracks <= 0:
+                    total_tracks = len(download_queue)
                 logger.info(
                     click.style(f"[Queue] {total_tracks} track(s) queued", dim=True)
                 )
 
-                for _ in download_queue:
-                    update_phase(progress, 0, 1, total_tracks)
+                fill_phase(progress, 0)
 
                 temp_path.mkdir(parents=True, exist_ok=True)
                 for item in download_queue:
@@ -307,7 +321,7 @@ async def main(config: CliConfig):
                             parents=True,
                             exist_ok=True,
                         )
-                    update_phase(progress, 1, 1, total_tracks)
+                    update_phase(progress, 1, total_tracks)
 
                 semaphore = asyncio.Semaphore(total_tracks)
 
@@ -332,7 +346,7 @@ async def main(config: CliConfig):
                             )
                         finally:
                             async with progress_lock:
-                                update_phase(progress, 2, 1, total_tracks)
+                                update_phase(progress, 2, total_tracks)
 
                 tasks = [
                     asyncio.create_task(download_one(i, item))
