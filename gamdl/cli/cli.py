@@ -170,6 +170,7 @@ async def main(config: CliConfig):
         exclude_tags=config.exclude_tags,
         cover_size=config.cover_size,
         truncate=config.truncate,
+        silent=True,
     )
     song_downloader = AppleMusicSongDownloader(
         base_downloader=base_downloader,
