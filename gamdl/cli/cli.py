@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import shutil
 from functools import wraps
 from pathlib import Path
 
@@ -319,5 +320,15 @@ async def main(config: CliConfig):
                 for i, item in enumerate(download_queue, 1)
             ]
             await asyncio.gather(*tasks)
+        try:
+            if temp_path.exists():
+                for child in temp_path.iterdir():
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
+                temp_path.rmdir()
+        except Exception:
+            logger.debug("Temp cleanup failed", exc_info=True)
 
     logger.info(f"Finished with {error_count} error(s)")
